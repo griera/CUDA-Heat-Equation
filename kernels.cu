@@ -2,7 +2,7 @@
 #include <float.h>
 #include <cuda.h>
 
-__global__ void gpu_Heat(float *h, float *g, int N, float *dev_residual) {
+__global__ void gpu_Heat(float *h, float *g, int N) {
     // In this case, the stride is N
 
     int i = blockIdx.y * blockDim.y + threadIdx.y;
@@ -15,7 +15,5 @@ __global__ void gpu_Heat(float *h, float *g, int N, float *dev_residual) {
     if (i < N - 1 && j < N - 1 && !is_first_row && !is_first_col) {
         int pos = i * N + j;
         g[pos] = 0.25 * (h[pos - 1] + h[pos - N] + h[pos + 1] + h[pos + N]);
-        float diff = g[pos] - h[pos];
-        atomicAdd(dev_residual, diff * diff);
     }
 }

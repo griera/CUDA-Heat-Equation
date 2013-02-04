@@ -35,7 +35,7 @@ void write_image(FILE * f, float *u, unsigned sizex, unsigned sizey);
 int coarsen(float *uold, unsigned oldx, unsigned oldy, float *unew,
         unsigned newx, unsigned newy);
 
-__global__ void gpu_Heat(float *h, float *g, int N, float *dev_residual);
+__global__ void gpu_Heat(float *h, float *g, int N);
 
 #define NB 8
 #define min(a,b) ( ((a) < (b)) ? (a) : (b) )
@@ -223,15 +223,9 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(dev_u, param.u, size, cudaMemcpyHostToDevice);
     cudaMemcpy(dev_uhelp, param.uhelp, size, cudaMemcpyHostToDevice);
 
-    // Allocate memory on GPU to compute the residual
-    float *dev_residual;
-    cudaMalloc(&dev_residual, sizeof(float));
-
     iter = 0;
     while (1) {
-        residual = 0.0;
-        cudaMemcpy(dev_residual, &residual, sizeof(float), cudaMemcpyHostToDevice);
-        gpu_Heat<<<Grid, Block>>>(dev_u, dev_uhelp, np, dev_residual);
+        gpu_Heat<<<Grid, Block>>>(dev_u, dev_uhelp, np);
         cudaThreadSynchronize(); // wait for all threads to complete
 
         // residual is computed on host, we need to get from GPU values computed in u and uhelp
@@ -240,12 +234,6 @@ int main(int argc, char *argv[]) {
 
         //residual = cpu_residual (param.u, param.uhelp, np, np);
 
-        // Get the residual computation from global memory (on device)
-        // and copy it into residual variable (host memory)
-        cudaMemcpy(&residual, dev_residual, sizeof(float), cudaMemcpyDeviceToHost);
-
-        //printf("Residual computation on GPU is ==> %f\n", residual);
-
         float * tmp = dev_u;
         dev_u = dev_uhelp;
         dev_uhelp = tmp;
@@ -253,8 +241,8 @@ int main(int argc, char *argv[]) {
         iter++;
 
         // solution good enough ?
-        if (residual < 0.00005)
-            break;
+        //if (residual < 0.00005)
+        //    break;
 
         // max. iteration reached ? (no limit with maxiter=0)
         if (iter >= param.maxiter)
