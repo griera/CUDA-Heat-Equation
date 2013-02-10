@@ -35,7 +35,25 @@ void write_image(FILE * f, float *u, unsigned sizex, unsigned sizey);
 int coarsen(float *uold, unsigned oldx, unsigned oldy, float *unew,
         unsigned newx, unsigned newy);
 
-__global__ void gpu_Heat(float *h, float *g, int N);
+__device__ float dev_residual = 0.0;
+
+__global__ void gpu_Heat(float *h, float *g, int N) {
+    // In this case, the stride is N
+
+    int i = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Assert if current thread belongs to first row or column of input matrix
+    bool is_first_row = threadIdx.y == 0 && blockIdx.y == 0;
+    bool is_first_col = threadIdx.x == 0 && blockIdx.x == 0;
+
+    if (i < N - 1 && j < N - 1 && !is_first_row && !is_first_col) {
+        int pos = i * N + j;
+        g[pos] = 0.25 * (h[pos - 1] + h[pos - N] + h[pos + 1] + h[pos + N]);
+        float diff = g[pos] - h[pos];
+        atomicAdd(&dev_residual, diff * diff);
+    }
+}
 
 #define NB 8
 #define min(a,b) ( ((a) < (b)) ? (a) : (b) )
@@ -224,15 +242,31 @@ int main(int argc, char *argv[]) {
     cudaMemcpy(dev_uhelp, param.uhelp, size, cudaMemcpyHostToDevice);
 
     iter = 0;
+    residual = 0.0;
+    float residual_aux = 0.0, residual_acc;
     while (1) {
+        if (iter > 0) {
+            residual_aux = residual_acc;
+        }
         gpu_Heat<<<Grid, Block>>>(dev_u, dev_uhelp, np);
         cudaThreadSynchronize(); // wait for all threads to complete
 
         // residual is computed on host, we need to get from GPU values computed in u and uhelp
-        cudaMemcpy(param.u, dev_u, size, cudaMemcpyDeviceToHost);
-        cudaMemcpy(param.uhelp, dev_uhelp, size, cudaMemcpyDeviceToHost);
+        //cudaMemcpy(param.u, dev_u, size, cudaMemcpyDeviceToHost);
+        //cudaMemcpy(param.uhelp, dev_uhelp, size, cudaMemcpyDeviceToHost);
 
         //residual = cpu_residual (param.u, param.uhelp, np, np);
+
+        //printf("Residual computation on GPU is ==> %f\n", residual);
+
+        // Get the residual computation from global memory (on device)
+        // and copy it into residual variable (host memory)
+        cudaMemcpyFromSymbol(&residual_acc, dev_residual, sizeof(float), 0, cudaMemcpyDeviceToHost);
+        //printf("Acumulate Residual computation on GPU is ==> %f\n", residual_acc);
+
+        // Update the value of residual
+        residual = residual_acc - residual_aux;
+        printf("Residual computation on GPU is ==> %f\n", residual);
 
         float * tmp = dev_u;
         dev_u = dev_uhelp;
@@ -241,8 +275,8 @@ int main(int argc, char *argv[]) {
         iter++;
 
         // solution good enough ?
-        //if (residual < 0.00005)
-        //    break;
+        if (residual < 0.00005)
+            break;
 
         // max. iteration reached ? (no limit with maxiter=0)
         if (iter >= param.maxiter)
@@ -250,7 +284,8 @@ int main(int argc, char *argv[]) {
     }
 
     // TODO: get result matrix from GPU
-
+    cudaMemcpy(param.u, dev_u, size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(param.uhelp, dev_uhelp, size, cudaMemcpyDeviceToHost);
 
     // free memory used in GPU
     cudaFree(dev_u);

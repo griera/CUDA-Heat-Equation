@@ -4,16 +4,13 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 CU_SRCS += \
-../heatCUDA.cu \
-../kernels.cu 
+../heatCUDA.cu 
 
 CU_DEPS += \
-./heatCUDA.d \
-./kernels.d 
+./heatCUDA.d 
 
 OBJS += \
-./heatCUDA.o \
-./kernels.o 
+./heatCUDA.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes
