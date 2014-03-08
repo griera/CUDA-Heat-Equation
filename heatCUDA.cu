@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <float.h>
-#include <string.h> // needed library to use strcmp function
+#include <string.h> /* needed library to use strcmp function */
 #include <cuda.h>
 
 typedef struct {
@@ -13,20 +13,20 @@ typedef struct {
 } heatsrc_t;
 
 typedef struct {
-    unsigned maxiter; // maximum number of iterations
-    unsigned resolution; // spatial resolution
-    int algorithm; // 0=>Jacobi, 1=>Gauss
+    unsigned maxiter; /* maximum number of iterations */
+    unsigned resolution; /* spatial resolution */
+    int algorithm; /* 0=>Jacobi, 1=>Gauss */
 
-    unsigned visres; // visualization resolution
+    unsigned visres; /* visualization resolution */
 
     float *u, *uhelp;
     float *uvis;
 
-    unsigned numsrcs; // number of heat sources
+    unsigned numsrcs; /* number of heat sources */
     heatsrc_t *heatsrcs;
 } algoparam_t;
 
-// function declarations
+/* function declarations */
 int read_input(FILE *infile, algoparam_t *param);
 void print_params(algoparam_t *param);
 int initialize(algoparam_t *param);
@@ -38,12 +38,12 @@ int coarsen(float *uold, unsigned oldx, unsigned oldy, float *unew,
 __device__ float dev_residual = 0.0;
 
 __global__ void gpu_Heat(float *h, float *g, int N) {
-    // In this case, the stride is N
+    /* In this case, the stride is N */
 
     int i = blockIdx.y * blockDim.y + threadIdx.y;
     int j = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // Assert if current thread belongs to first row or column of input matrix
+    /* Assert if current thread belongs to first row or column of input matrix */
     bool is_first_row = threadIdx.y == 0 && blockIdx.y == 0;
     bool is_first_col = threadIdx.x == 0 && blockIdx.x == 0;
 
@@ -81,10 +81,10 @@ float cpu_jacobi(float *u, float *utmp, unsigned sizex, unsigned sizey) {
         for (int jj = 0; jj < nby; jj++)
             for (int i = 1 + ii * bx; i <= min((ii+1)*bx, sizex-2); i++)
                 for (int j = 1 + jj * by; j <= min((jj+1)*by, sizey-2); j++) {
-                    utmp[i * sizey + j] = 0.25 * (u[i * sizey + (j - 1)] + // left
-                            u[i * sizey + (j + 1)] + // right
-                            u[(i - 1) * sizey + j] + // top
-                            u[(i + 1) * sizey + j]); // bottom
+                    utmp[i * sizey + j] = 0.25 * (u[i * sizey + (j - 1)] + /* left */
+                            u[i * sizey + (j + 1)] + /* right */
+                            u[(i - 1) * sizey + j] + /* top */
+                            u[(i + 1) * sizey + j]); /* bottom */
                     diff = utmp[i * sizey + j] - u[i * sizey + j];
                     sum += diff * diff;
                 }
@@ -102,17 +102,17 @@ int main(int argc, char *argv[]) {
     FILE *infile, *resfile;
     char *resfilename;
 
-    // algorithmic parameters
+    /* algorithmic parameters */
     algoparam_t param;
     int np;
 
-    // check arguments
+    /* check arguments */
     if (argc < 4) {
         usage(argv[0]);
         return 1;
     }
 
-    // check input file
+    /* check input file */
     if (!(infile = fopen(argv[1], "r"))) {
         fprintf(stderr, "\nError: Cannot open \"%s\" for reading.\n\n",
                 argv[1]);
@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // check result file
+    /* check result file */
     resfilename = "heat.ppm";
 
     if (!(resfile = fopen(resfilename, "w"))) {
@@ -131,17 +131,17 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // check input
+    /* check input */
     if (!read_input(infile, &param)) {
         fprintf(stderr, "\nError: Error parsing input file.\n\n");
         usage(argv[0]);
         return 1;
     }
 
-    // full size (param.resolution are only the inner points)
+    /* full size (param.resolution are only the inner points) */
     np = param.resolution + 2;
 
-    int Grid_Dim, Block_Dim; // Grid and Block structure values
+    int Grid_Dim, Block_Dim; /* Grid and Block structure values */
     if (strcmp(argv[2], "-t") == 0) {
         Block_Dim = atoi(argv[3]);
         Grid_Dim = np / Block_Dim + ((np % Block_Dim) != 0);
@@ -169,10 +169,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // starting time
-    float elapsed_time_ms; // which is applicable for asynchronous code also
-    cudaEvent_t start, stop; // using cuda events to measure time
-    cudaEventCreate(&start); // instrument code to measure start time
+    /* starting time */
+    float elapsed_time_ms; /* which is applicable for asynchronous code also */
+    cudaEvent_t start, stop; /* using cuda events to measure time */
+    cudaEventCreate(&start); /* instrument code to measure start time */
     cudaEventCreate(&stop);
 
     cudaEventRecord(start, 0);
@@ -188,20 +188,20 @@ int main(int argc, char *argv[]) {
 
         iter++;
 
-        // solution good enough ?
+        /* solution good enough ? */
         if (residual < 0.00005)
             break;
 
-        // max. iteration reached ? (no limit with maxiter=0)
+        /* max. iteration reached ? (no limit with maxiter=0) */
         if (iter >= param.maxiter)
             break;
     }
 
-    cudaEventRecord(stop, 0); // instrument code to measue end time
+    cudaEventRecord(stop, 0); /* instrument code to measue end time */
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&elapsed_time_ms, start, stop);
 
-    // Flop count after iter iterations
+    /* Flop count after iter iterations */
     float flop = iter * 11.0 * param.resolution * param.resolution;
 
     fprintf(stdout, "Time on CPU in ms.= %f ", elapsed_time_ms);
@@ -226,18 +226,18 @@ int main(int argc, char *argv[]) {
     dim3 Grid(Grid_Dim, Grid_Dim);
     dim3 Block(Block_Dim, Block_Dim);
 
-    // starting time
+    /* starting time */
     cudaEventRecord(start, 0);
     cudaEventSynchronize(start);
 
     float *dev_u, *dev_uhelp;
 
-    // Allocation on GPU for matrices u and uhelp
+    /* Allocation on GPU for matrices u and uhelp */
     size_t size = np * np * sizeof(float);
     cudaMalloc(&dev_u, size);
     cudaMalloc(&dev_uhelp, size);
 
-    // Copy initial values in u and uhelp from host to GPU
+    /* Copy initial values in u and uhelp from host to GPU */
     cudaMemcpy(dev_u, param.u, size, cudaMemcpyHostToDevice);
     cudaMemcpy(dev_uhelp, param.uhelp, size, cudaMemcpyHostToDevice);
 
@@ -249,22 +249,23 @@ int main(int argc, char *argv[]) {
             residual_aux = residual_acc;
         }
         gpu_Heat<<<Grid, Block>>>(dev_u, dev_uhelp, np);
-        cudaThreadSynchronize(); // wait for all threads to complete
+        cudaThreadSynchronize(); /* wait for all threads to complete */
 
-        // residual is computed on host, we need to get from GPU values computed in u and uhelp
-        //cudaMemcpy(param.u, dev_u, size, cudaMemcpyDeviceToHost);
-        //cudaMemcpy(param.uhelp, dev_uhelp, size, cudaMemcpyDeviceToHost);
+        /* residual is computed on host, we need to get from GPU values computed in u and uhelp */
+        /* cudaMemcpy(param.u, dev_u, size, cudaMemcpyDeviceToHost); */
+        /* cudaMemcpy(param.uhelp, dev_uhelp, size, cudaMemcpyDeviceToHost); */
 
-        //residual = cpu_residual (param.u, param.uhelp, np, np);
+        /* residual = cpu_residual (param.u, param.uhelp, np, np); */
 
-        //printf("Residual computation on GPU is ==> %f\n", residual);
+        /* printf("Residual computation on GPU is ==> %f\n", residual); */
 
-        // Get the residual computation from global memory (on device)
-        // and copy it into residual variable (host memory)
+        /* Get the residual computation from global memory (on device)
+         * and copy it into residual variable (host memory)
+         */
         cudaMemcpyFromSymbol(&residual_acc, dev_residual, sizeof(float), 0, cudaMemcpyDeviceToHost);
-        //printf("Acumulate Residual computation on GPU is ==> %f\n", residual_acc);
+        /* printf("Acumulate Residual computation on GPU is ==> %f\n", residual_acc); */
 
-        // Update the value of residual
+        /* Update the value of residual */
         residual = residual_acc - residual_aux;
         printf("Residual computation on GPU is ==> %f\n", residual);
 
@@ -274,24 +275,24 @@ int main(int argc, char *argv[]) {
 
         iter++;
 
-        // solution good enough ?
+        /* solution good enough ? */
         if (residual < 0.00005)
             break;
 
-        // max. iteration reached ? (no limit with maxiter=0)
+        /* max. iteration reached ? (no limit with maxiter=0) */
         if (iter >= param.maxiter)
             break;
     }
 
-    // TODO: get result matrix from GPU
+    /* get result matrix from GPU */
     cudaMemcpy(param.u, dev_u, size, cudaMemcpyDeviceToHost);
     cudaMemcpy(param.uhelp, dev_uhelp, size, cudaMemcpyDeviceToHost);
 
-    // free memory used in GPU
+    /* free memory used in GPU */
     cudaFree(dev_u);
     cudaFree(dev_uhelp);
 
-    cudaEventRecord( stop, 0 );// instrument code to measue end time
+    cudaEventRecord( stop, 0 ); /* instrument code to measue end time */
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&elapsed_time_ms, start, stop);
 
@@ -304,7 +305,7 @@ int main(int argc, char *argv[]) {
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
 
-    // for plot...
+    /* for plot... */
     coarsen(param.u, np, np, param.uvis, param.visres + 2, param.visres + 2);
 
     write_image(resfile, param.uvis, param.visres + 2, param.visres + 2);
@@ -325,12 +326,10 @@ int initialize(algoparam_t *param)
     int i, j;
     float dist;
 
-    // total number of points (including border)
+    /* total number of points (including border) */
     const int np = param->resolution + 2;
 
-    //
-    // allocate memory
-    //
+    /* allocate memory */
     (param->u) = (float*) calloc(sizeof(float), np * np);
     (param->uhelp) = (float*) calloc(sizeof(float), np * np);
     (param->uvis) = (float*) calloc(sizeof(float),
@@ -397,7 +396,7 @@ int initialize(algoparam_t *param)
         }
     }
 
-    // Copy u into uhelp
+    /* Copy u into uhelp */
     float *putmp, *pu;
     pu = param->u;
     putmp = param->uhelp;
@@ -408,9 +407,7 @@ int initialize(algoparam_t *param)
     return 1;
 }
 
-/*
- * free used memory
- */
+/* free used memory */
 int finalize(algoparam_t *param) {
     if (param->u) {
         free(param->u);
@@ -435,7 +432,7 @@ int finalize(algoparam_t *param) {
  * and write the resulting image to file f
  */
 void write_image(FILE * f, float *u, unsigned sizex, unsigned sizey) {
-    // RGB table
+    /* RGB table */
     unsigned char r[1024], g[1024], b[1024];
     int i, j, k;
 
@@ -443,7 +440,7 @@ void write_image(FILE * f, float *u, unsigned sizex, unsigned sizey) {
 
     j = 1023;
 
-    // prepare RGB table
+    /* prepare RGB table */
     for (i = 0; i < 256; i++) {
         r[j] = 255;
         g[j] = i;
@@ -472,7 +469,7 @@ void write_image(FILE * f, float *u, unsigned sizex, unsigned sizey) {
     min = DBL_MAX;
     max = -DBL_MAX;
 
-    // find minimum and maximum
+    /* find minimum and maximum */
     for (i = 0; i < sizey; i++) {
         for (j = 0; j < sizex; j++) {
             if (u[i * sizex + j] > max)
@@ -517,8 +514,9 @@ int coarsen(float *uold, unsigned oldx, unsigned oldy, float *unew,
         stopy = oldy;
     }
 
-    // NOTE: this only takes the top-left corner,
-    // and doesnt' do any real coarsening
+    /* NOTE: this only takes the top-left corner,
+     * and doesnt' do any real coarsening
+     */
     for (i = 0; i < stopy - 1; i++) {
         for (j = 0; j < stopx - 1; j++) {
             unew[i * newx + j] = uold[i * oldx * stepy + j * stepx];
@@ -579,3 +577,4 @@ void print_params(algoparam_t *param) {
                 param->heatsrcs[i].range, param->heatsrcs[i].temp);
     }
 }
+
